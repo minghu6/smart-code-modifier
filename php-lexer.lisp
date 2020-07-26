@@ -1,3 +1,4 @@
+
 (load "~/.sbclrc")
 
 (ql:quickload "trivia")
@@ -32,9 +33,20 @@
   (lastcar (qlist serapeum-queue)))
 
 
+;;; Load config file
+(defun load-lex-conf ()
+  (read (open "/mnt/d/Coding/CL/smart-code-modifier/php.lex.conf.lisp")))
 
-;;; code generation start:
 
+(defvar *lex-conf* (load-lex-conf))
+
+
+;;; In essence, it just converts the regex pattern into dfa map manually.
+;;; I'm a little genius maybe, [doge]
+(defparameter *lex-dfa-map* (acdr :lex-dfa-map *lex-conf*))
+
+
+;;; Code generation start:
 (defun pred-fun-sym (name)
   (intern
    (string-upcase
@@ -49,15 +61,15 @@
 (defun parse-type-fun-name (fun-name)
   "get the token list of fun name"
   (filter (lambda (s) (and
-                       (string/= s "but")
-                       (string/= s "p")))
-          (split-sequence #\- fun-name)))
+                       (string/= s "BUT")
+                       (string/= s "P")))
+          (split-sequence #\- (string-upcase fun-name))))
 
 
 (defmacro gen-char-type-fun-1 (nested-list)
   "for (name value) of nested-list => *,name* => value and aaap"
   (eval
-   `(cons 'progn
+   `(cons 'list
           (flatten-1 (map 'list (lambda (item)
                                     (let ((name (first item))
                                           (char (second item)))
@@ -70,7 +82,7 @@
 
 
 (defmacro gen-char-type-fun-2 (fun-name-list)
-   (cons 'progn
+   (cons 'list
            (map 'list (lambda (fun-name)
                (flet ((gen-cond (char-name)
                         `(,(pred-fun-sym char-name) c)))
@@ -87,7 +99,7 @@
          fun-name-list)))
 
 
-(eval-when (:compile-toplevel :execute :load-toplevel)
+(eval-always
   (defun anycharp (c)
     (declare (ignore c))
     t)
@@ -104,34 +116,35 @@
     (of c '(#\p #\h)))
 
 
-
-
   (gen-char-type-fun-1
    '(("slash" #\/)
      ("question" #\?)
      ("asterisk" #\*)
      ("<" #\<)))
 
-  (gen-char-type-fun-2
-   ("anychar-but-slash"
-    "anychar-but-slash-asterisk"
-    "anychar-but-asterisk"
-    "anychar-but-question")))
+  ;; (gen-char-type-fun-2
+  ;;  ("anychar-but-slash"
+  ;;   "anychar-but-slash-asterisk"
+  ;;   "anychar-but-asterisk"
+  ;;   "anychar-but-question"))
+  )
 
-
-(defun load-lex-conf ()
-  (read (open "/mnt/d/Coding/CL/smart-code-modifier/php.lex.conf.lisp")))
-
-
-(defvar *lex-conf* (load-lex-conf))
-
-
-(defparameter *lex-dfa-map* (acdr :lex-dfa-map *lex-conf*))
 
 
 (defmacro gen-extra-type-fun (fun-sym char-scope)
     `(defun ,fun-sym (c)
        (of c ,(cons 'list char-scope))))
+
+
+(defmacro gen-extra-type-fun-l ()
+  `(lis-apply gen-extra-type-fun ,(extra-type-fun-list)))
+
+
+(defmacro gen-raw-type-fun ()
+  `(gen-char-type-fun-2
+    ,(mapcar (lambda (fun-sym) (symbol-name fun-sym))
+             (raw-type-fun-list)))
+  )
 
 
 (eval-always
@@ -152,37 +165,29 @@
            (acdr :extra-type-fun *lex-conf*))))
 
 
-  (defmacro gen-extra-type-fun-l ()
-    `(lis-apply gen-extra-type-fun ,(extra-type-fun-list)))
+  (defun raw-type-fun-list ()
+    "=> [type-fun-symbol*]"
+    (filter (lambda (type-fun) (and
+                                type-fun
+                                (not
+                                 (fboundp (pred-fun-sym (symbol-name type-fun))))))
+            (remove-duplicates
+             (flatten-1
+              (loop for state-output-map in *lex-dfa-map* collect
+                   (loop for each-output in (cdr state-output-map) collect
+                        (car each-output)))))))
 
 
   (gen-extra-type-fun-l)
+  (gen-raw-type-fun)
   )
 
 
 
-(defun raw-type-fun-list ()
-  (remove-duplicates
-   (flatten-1
-    (loop for state-output-map in *lex-dfa-map* collect
-         (loop for each-output in (cdr state-output-map) collect
-              (car each-output))))))
+;;; Code generation end
 
 
-
-(raw-type-fun-list)
-
-(mapcar (lambda (x) (~> x cdr first)) '((1 a) (2 b) (3 c)))
-
-(~> '(1 a) cdr first)
-
-;(unless (fboundp type-fun))
-
-;;; code generation end
-
-
-;;; error define
-
+;;; Define error
 (define-condition unknown-lex-pattern-error (error)
   ((token
     :initarg :token
@@ -204,25 +209,6 @@
 
 
 (lis-apply gen-restart-fun (("use-blank-state")))
-
-;;; In essence, it just converts the regex pattern into dfa map manually.
-;;; I'm a little genius maybe, [doge]
-;; (defparameter *lex-dfa-map* '((blank-state . ((slash . (comment-start-state t))
-;;                                               (whitespace . (blank-state nil))
-;;                                               (<     . (tag-start-state t))
-;;                                               (identity . (identity-name-state t))
-;;                                               ))
-;;                               (tag-start-state . ((question . (tag-start-naming-state nil))
-;;                                                   ))
-;;                               (tag-start-naming-state . ((php . (php-tagname-state nil))))
-;;                               (php-tagname-state . ((php . (php-tagname-state nil))
-;;                                                     (whitespace . (blank-state t))))
-
-;;                               (identity-name-state . ((identity . (identity-name-state nil))
-;;                                                       (whitespace . (blank-state t))))
-
-;;                               ))
-
 
 
 ;;; Class Lexer
@@ -410,9 +396,9 @@ declare(strict_types=1);" )
 
 (run-all *tested-lexer*)
 
-(next-step *tested-lexer*)
+;; (next-step *tested-lexer*)
 
-(next-token *tested-lexer*)
+;; (next-token *tested-lexer*)
 
 
 (defvar *tested-php-code-slice-1*
