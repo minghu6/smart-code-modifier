@@ -1,51 +1,3 @@
-
-(load "~/.sbclrc")
-
-(ql:quickload "trivia")
-(ql:quickload "cl-utilities")
-(ql:quickload "alexandria")
-(ql:quickload "cl-ppcre")
-(ql:quickload "minghu6")
-(ql:quickload "serapeum")
-
-
-;; test code
-;; (shadow 'match '#:trivia)
-;; (import 'match '#:trivia)
-;(find-symbol "MATCH" 'trivia)
-;; (match '(1 2 3)
-;;        ((cons x y)
-;;         ; ^^ pattern
-;;        (print x)
-;;        (print y)))
-
-
-;(use-package :alexandria)
-;(use-package :trivia)
-;(use-package :cl-utilities)
-(use-package '#:minghu6)
-(use-package '#:serapeum)
-(use-package '#:alexandria)
-
-
-;;; Some temporary utils
-(defun back (serapeum-queue)
-  (lastcar (qlist serapeum-queue)))
-
-
-;;; Load config file
-(defun load-lex-conf ()
-  (read (open "/mnt/d/Coding/CL/smart-code-modifier/php.lex.conf.lisp")))
-
-
-(defvar *lex-conf* (load-lex-conf))
-
-
-;;; In essence, it just converts the regex pattern into dfa map manually.
-;;; I'm a little genius maybe, [doge]
-(defparameter *lex-dfa-map* (acdr :lex-dfa-map *lex-conf*))
-
-
 ;;; Code generation start:
 (defun pred-fun-sym (name)
   (intern
@@ -100,27 +52,56 @@
 
 
 (eval-always
+  ;;; Some default type fun
   (defun anycharp (c)
     (declare (ignore c))
     t)
+
 
   ; use serapeum' blankp for sequence and whitespacep for character
   ;; (defun blankp (c)
   ;;   (of c '(#\Space #\Tab #\Return #\Newline)))
 
 
+  (defun identity-head-p (c)
+    (of c (pp *ascii-letters* '(#\_))))
+
+
   (defun identityp (c)
     (of c (pp *ascii-letters* *digits* '(#\_))))
 
-  (defun phpp (c)
-    (of c '(#\p #\h)))
+
+  (defun parenthesisp (c)
+    (of c '(#\( #\) #\{ #\} #\[ #\])))
 
 
+  (defun operatorp (c)
+    (of c '(#\+ #\- #\* #\/
+            #\^ #\| #\& #\~
+            #\? #\: #\= #\@
+            #\> #\<)))
+
+
+  (defun numbercharp (c)
+    (of c *digits*))
+
+
+  (defun numberchar-head-p (c)
+    (of c (pp *digits* '(#\+ #\-))))
+  
+
+  ;;; Generate one meta type fun
   (gen-char-type-fun-1
    '(("slash" #\/)
      ("question" #\?)
      ("asterisk" #\*)
-     ("<" #\<)))
+     ("<" #\<)
+     ("semicolon" #\;)
+     ("singlequote" #\')
+     ("doublequote" #\")
+     ("backslash" #\\)
+     ("comma" #\,)
+     ))
 
   ;; (gen-char-type-fun-2
   ;;  ("anychar-but-slash"
@@ -207,8 +188,9 @@
   (format output "~a~%~a: \"~a\" " (show-token token :output nil)
           state c))
 
-
-(lis-apply gen-restart-fun (("use-blank-state")))
+(eval-always
+  (lis-apply gen-restart-fun (("use-blank-state")))
+  )
 
 
 ;;; Class Lexer
@@ -257,7 +239,7 @@
             (cond ((eql state-1 state-0) state-1)
                   (t (format nil "~a => ~a" state-1 state-0))))))
 
-
+;;; Key Function
 (defun next-state-map (state c)
   (let ((state-map (acdr state *lex-dfa-map*)))
     (acdr
@@ -359,7 +341,7 @@
                ((or (not step-result) (first step-result)) step-result))))
 
       (flet ((tail-call (automaton)
-               (let ((last-token (back (token-queue automaton))))
+               (let ((last-token (qback (token-queue automaton))))
                  (show-token last-token :output output)
                  `(,last-token ,(first (states-stack automaton)))
                  )))
@@ -370,60 +352,3 @@
 
 (defmethod run-all ((automaton lexer))
   (loop while (next-token automaton :output t)))
-
-
-
-(defvar *php-code-slice-1-1*   "<?php
-declare(strict_types=1);" )
-
-
-
-(defun test-lexer (source)
-  (format t "~%~%~%")
-  (let ((tested-lexer (make-instance 'lexer :source source)))
-    (loop while (next-step tested-lexer :output t))
-    (recycle-tail-token tested-lexer)
-    (print (qlist (token-queue tested-lexer)))
-    ))
-
-
-;(test-lexer  *php-code-slice-1-1*)
-
-
-
-
-(defparameter *tested-lexer* (make-instance 'lexer :source "<?php aaa "))
-
-(run-all *tested-lexer*)
-
-;; (next-step *tested-lexer*)
-
-;; (next-token *tested-lexer*)
-
-
-(defvar *tested-php-code-slice-1*
-  "<?php
-declare(strict_types=1);
-
-if (false === @include_once 'OpenID/RelyingParty.php') {
-exit;
-
-}
-
-
-/* Change this to true if using phpMyAdmin over https */
-$secure_cookie = false;
-
-/**
- * Map of authenticated users to MySQL user/password pairs.
- */
-$AUTH_MAP = [
-'https://launchpad.net/~username' => [
-'user' => 'root',
-        'password' => '',
-    
-],
-
-];
- ")
-
