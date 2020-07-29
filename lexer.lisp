@@ -1,21 +1,57 @@
+(in-package #:php-hacker)
+;;(in-package #:cl)
+
+(eval-when (:compile-toplevel :execute :load-toplevel)
+
+  (ql:quickload "cl-ppcre")
+  (ql:quickload "alexandria")
+  (ql:quickload "serapeum")
+  (ql:quickload "minghu6")
+
+  (use-package '#:serapeum)
+  (use-package '#:alexandria)
+  (use-package '#:minghu6)
+  )
+
+
+;;; Load configure env
+(eval-always
+  (defun load-lex-env ()
+    (let* ((lex-conf
+            (with-open-file (stream "/mnt/d/Coding/CL/smart-code-modifier/php.lex.conf.lisp")
+              (read stream)))
+           (lex-dfa-map (acdr :lex-dfa-map lex-conf)))
+
+      (defparameter *lex-conf* lex-conf)
+
+      ;; In essence, it just converts the regex pattern into dfa map manually.
+      ;; I'm a little genius maybe, [doge]
+      (defparameter *lex-dfa-map* lex-dfa-map)
+      ))
+  (load-lex-env)
+  )
+
+
 ;;; Code generation start:
-(defun pred-fun-sym (name)
-  (intern
-   (string-upcase
-    (concatenate
-     'string
-     name
-     (if (ppcre:scan (ppcre:create-scanner "^(\\w+-)+\\w+$") name)
-         "-p"
-         "p")))))
+(eval-always
+  (defun pred-fun-sym (name)
+    (intern
+     (string-upcase
+      (concatenate
+       'string
+       name
+       (if (ppcre:scan (ppcre:create-scanner "^(\\w+-)+\\w+$") name)
+           "-p"
+           "p")))))
 
 
-(defun parse-type-fun-name (fun-name)
-  "get the token list of fun name"
-  (filter (lambda (s) (and
-                       (string/= s "BUT")
-                       (string/= s "P")))
-          (split-sequence #\- (string-upcase fun-name))))
+  (defun parse-type-fun-name (fun-name)
+    "get the token list of fun name"
+    (filter (lambda (s) (and
+                         (string/= s "BUT")
+                         (string/= s "P")))
+            (split-sequence #\- (string-upcase fun-name))))
+  )
 
 
 (defmacro gen-char-type-fun-1 (nested-list)
@@ -50,7 +86,6 @@
                                         negative-names)))))))
          fun-name-list)))
 
-
 (eval-always
   ;;; Some default type fun
   (defun anycharp (c)
@@ -79,7 +114,8 @@
     (of c '(#\+ #\- #\* #\/
             #\^ #\| #\& #\~
             #\? #\: #\= #\@
-            #\> #\<)))
+            #\> #\<
+            #\.)))
 
 
   (defun numbercharp (c)
@@ -88,7 +124,7 @@
 
   (defun numberchar-head-p (c)
     (of c (pp *digits* '(#\+ #\-))))
-  
+
 
   ;;; Generate one meta type fun
   (gen-char-type-fun-1
@@ -99,7 +135,7 @@
      ("semicolon" #\;)
      ("singlequote" #\')
      ("doublequote" #\")
-     ("backslash" #\\)
+     ("backslash" #\\ )
      ("comma" #\,)
      ))
 
@@ -115,17 +151,6 @@
 (defmacro gen-extra-type-fun (fun-sym char-scope)
     `(defun ,fun-sym (c)
        (of c ,(cons 'list char-scope))))
-
-
-(defmacro gen-extra-type-fun-l ()
-  `(lis-apply gen-extra-type-fun ,(extra-type-fun-list)))
-
-
-(defmacro gen-raw-type-fun ()
-  `(gen-char-type-fun-2
-    ,(mapcar (lambda (fun-sym) (symbol-name fun-sym))
-             (raw-type-fun-list)))
-  )
 
 
 (eval-always
@@ -145,6 +170,11 @@
                      ))
            (acdr :extra-type-fun *lex-conf*))))
 
+  (defmacro gen-extra-type-fun-l ()
+    `(lis-apply gen-extra-type-fun ,(extra-type-fun-list)))
+
+  (gen-extra-type-fun-l)
+
 
   (defun raw-type-fun-list ()
     "=> [type-fun-symbol*]"
@@ -158,8 +188,12 @@
                    (loop for each-output in (cdr state-output-map) collect
                         (car each-output)))))))
 
+  (defmacro gen-raw-type-fun ()
+    `(gen-char-type-fun-2
+      ,(mapcar (lambda (fun-sym) (symbol-name fun-sym))
+               (raw-type-fun-list)))
+    )
 
-  (gen-extra-type-fun-l)
   (gen-raw-type-fun)
   )
 
@@ -167,30 +201,6 @@
 
 ;;; Code generation end
 
-
-;;; Define error
-(define-condition unknown-lex-pattern-error (error)
-  ((token
-    :initarg :token
-    :reader token)
-   (c
-    :initarg :c
-    :reader c)
-   (state
-    :initarg :state
-    :reader state)
-   (error-info
-    :initarg :error-info
-    :reader error-info)))
-
-
-(defun format-unknown-lex-pattern-error-info (token c state &key (output t))
-  (format output "~a~%~a: \"~a\" " (show-token token :output nil)
-          state c))
-
-(eval-always
-  (lis-apply gen-restart-fun (("use-blank-state")))
-  )
 
 
 ;;; Class Lexer
@@ -275,6 +285,31 @@
          (colno (second meta)))
 
     (format output "Ln ~a, Col ~a~%~a~%" lineno colno inner-token)))
+
+
+;;; Define error
+(define-condition unknown-lex-pattern-error (error)
+  ((token
+    :initarg :token
+    :reader token)
+   (c
+    :initarg :c
+    :reader c)
+   (state
+    :initarg :state
+    :reader state)
+   (error-info
+    :initarg :error-info
+    :reader error-info)))
+
+
+(defun format-unknown-lex-pattern-error-info (token c state &key (output t))
+  (format output "~a~%~a: \"~a\" " (show-token token :output nil)
+          state c))
+
+(eval-always
+  (lis-apply gen-restart-fun (("use-blank-state")))
+  )
 
 
 (defmethod next-step ((automaton lexer) &key (output t))

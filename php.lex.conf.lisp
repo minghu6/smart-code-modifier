@@ -1,5 +1,6 @@
 ((:extra-type-fun . ((var-head-p #\$)
                      (phpp (#\p #\h))
+                     
                      ))
  (:lex-dfa-map .
                ((blank-state .((slash . (comment-start-state t))
@@ -86,6 +87,7 @@
                 (numberchar-state . ((numberchar . (numberchar-state nil))
                                      (parenthesis . (blank-state t))
                                      (comma . (delimiter-state t))
+                                     (operator . (operator-state t))
                                      ))
 
                 (comment-start-state . ((slash . (line-comment-state nil))

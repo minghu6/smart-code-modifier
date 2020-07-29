@@ -1,16 +1,22 @@
-
-(load "~/.sbclrc")
-
-
-(ql:quickload "alexandria")
-(ql:quickload "cl-ppcre")
-(ql:quickload "minghu6")
-(ql:quickload "serapeum")
+(eval-when (:compile-toplevel :load-toplevel)
+  (in-package #:php-hacker))
 
 
-(use-package '#:minghu6)
-(use-package '#:serapeum)
-(use-package '#:alexandria)
+(eval-when (:execute :load-toplevel)
+  (load "~/.sbclrc")
+
+
+  (ql:quickload "alexandria")
+  (ql:quickload "cl-ppcre")
+  (ql:quickload "minghu6")
+  (ql:quickload "serapeum")
+  (ql:quickload "cl-fad")
+  (ql:quickload "ppath")
+
+  (use-package '#:minghu6)
+  (use-package '#:serapeum)
+  (use-package '#:alexandria)
+  )
 
 
 (defun load-repl-env ()
@@ -19,19 +25,8 @@
   )
 
 
-(defun load-lex-env ()
-  (defparameter *lex-conf*
-    (with-open-file (stream "/mnt/d/Coding/CL/smart-code-modifier/php.lex.conf.lisp")
-      (read stream)))
-
-  ;; In essence, it just converts the regex pattern into dfa map manually.
-  ;; I'm a little genius maybe, [doge]
-  (defparameter *lex-dfa-map* (acdr :lex-dfa-map *lex-conf*))
-  (load "lexer.lisp")
-  )
-
-
-(load-lex-env)
+(eval-when (:execute)
+  (load "lexer.lisp"))
 
 
 ;;; Temporary Utils
@@ -48,15 +43,33 @@
   ))
 
 
-(defparameter *tested-lexer* (create-php-lexer "draft/test-0.php"))
+;; (defparameter *tested-lexer* (create-php-lexer "draft/test-0.php"))
 
-(defparameter *tested-lexer*  (make-instance 'lexer :source "(-2, +200, -100, 20)"))
+;; (defparameter *tested-lexer*  (make-instance 'lexer :source "(-2, +200, -100, 20)"))
 
-(run-all *tested-lexer*)
+;; (run-all *tested-lexer*)
 
+(defun run-test ()
+  (let ((lexer (create-php-lexer "draft/test-0.php")))
+    (run-all lexer)))
 ;; (next-step *tested-lexer*)
 
 ;(next-token *tested-lexer*)
 
 ;(print (token-queue *tested-lexer*))
 
+(run-test)
+
+(setq path-queue (queue))
+
+(cl-fad:walk-directory "/mnt/d/Coding/Python3/smart_code_modifier/draft/phpmyadmin/libraries"
+                       (lambda (path) (enq (namestring path) path-queue))
+                       :test (lambda (path) (string$= ".php" (namestring path))))
+
+
+(defclass syntax ()
+  nil)
+
+;;; Class PHPSyntax
+(defclass php-syntax ()
+  ())
