@@ -20,13 +20,13 @@
 
 
 (defun load-repl-env ()
-  (ql:quickload "trivia")
-  ;(use-package :trivia)
+  ;(ql:quickload "trivia")
+  (load "lexer.lisp")
+  (load "php-preprocessor.lisp")
   )
 
 
-(eval-when (:execute)
-  (load "lexer.lisp"))
+(load-repl-env)
 
 
 ;;; Temporary Utils
@@ -37,9 +37,14 @@
       contents)))
 
 
+(defun relative-path (full-path common-path)
+  (string-replace common-path full-path "."))
+
+
 (defun create-php-lexer (php-file-path)
-  (let ((source (file-contents-string php-file-path)))
-    (make-instance 'lexer :source source)
+  (let* ((source (file-contents-string php-file-path))
+         (php-preprocs (make-instance 'php-preprocessors :source source)))
+    (make-instance 'lexer :source (run-all-preprocessors php-preprocs :output nil))
   ))
 
 
@@ -49,22 +54,38 @@
 
 ;; (run-all *tested-lexer*)
 
-(defun run-test ()
-  (let ((lexer (create-php-lexer "draft/test-0.php")))
-    (run-all lexer)))
+(defun run-test (php-path &optional (start-dir "."))
+  (let ((lexer (create-php-lexer php-path)))
+    (format t "Lexer Parsing: ~a~%~%" (ppath:relpath php-path start-dir))
+    (run-all lexer :output nil)))
 ;; (next-step *tested-lexer*)
 
 ;(next-token *tested-lexer*)
 
 ;(print (token-queue *tested-lexer*))
 
-(run-test)
 
-(setq path-queue (queue))
-
-(cl-fad:walk-directory "/mnt/d/Coding/Python3/smart_code_modifier/draft/phpmyadmin/libraries"
-                       (lambda (path) (enq (namestring path) path-queue))
+(defparameter *path-queue* (queue))
+(defparameter *scaned-dir*
+  "/mnt/d/Coding/Python3/smart_code_modifier/draft/phpmyadmin/libraries/classes/")
+(cl-fad:walk-directory *scaned-dir*
+                       (lambda (path) (enq (namestring path) *path-queue*))
                        :test (lambda (path) (string$= ".php" (namestring path))))
+
+(defun test-scanned-dir ()
+  (do ((php-path (front *path-queue*) (front *path-queue*)))
+      ((queue-empty-p *path-queue*) nil)
+    (run-test php-path *scaned-dir*)
+    (deq *path-queue*)))
+
+
+;(test-scanned-dir)
+
+(run-test
+ "/mnt/d/Coding/Python3/smart_code_modifier/draft/phpmyadmin/libraries/classes/OpenDocument.php"
+ *scaned-dir*)
+
+(load-repl-env)
 
 
 (defclass syntax ()

@@ -1,21 +1,23 @@
-(in-package #:php-hacker)
+;;(in-package #:php-hacker)
 ;;(in-package #:cl)
 
-(eval-when (:compile-toplevel :execute :load-toplevel)
+;; (eval-when (:compile-toplevel :execute :load-toplevel)
 
-  (ql:quickload "cl-ppcre")
-  (ql:quickload "alexandria")
-  (ql:quickload "serapeum")
-  (ql:quickload "minghu6")
+;;   (ql:quickload "cl-ppcre")
+;;   (ql:quickload "alexandria")
+;;   (ql:quickload "serapeum")
+;;   (ql:quickload "minghu6")
 
-  (use-package '#:serapeum)
-  (use-package '#:alexandria)
-  (use-package '#:minghu6)
-  )
+;;   (use-package '#:serapeum)
+;;   (use-package '#:alexandria)
+;;   (use-package '#:minghu6)
+;;   )
 
 
 ;;; Load configure env
 (eval-always
+  (unlock-package '#:serapeum)
+
   (defun load-lex-env ()
     (let* ((lex-conf
             (with-open-file (stream "/mnt/d/Coding/CL/smart-code-modifier/php.lex.conf.lisp")
@@ -93,9 +95,11 @@
     t)
 
 
-  ; use serapeum' blankp for sequence and whitespacep for character
-  ;; (defun blankp (c)
-  ;;   (of c '(#\Space #\Tab #\Return #\Newline)))
+  ;; non-graphic-but-space-p
+  (defun ngbsp (c)
+    (or
+     (not (graphic-char-p c))
+     (char= c #\ )))
 
 
   (defun identity-head-p (c)
@@ -111,19 +115,19 @@
 
 
   (defun operatorp (c)
-    (of c '(#\+ #\- #\* #\/
-            #\^ #\| #\& #\~
+    (of c '(#\+ #\- #\* #\/ #\%
+            #\^ #\| #\& #\~ #\!
             #\? #\: #\= #\@
             #\> #\<
             #\.)))
 
 
   (defun numbercharp (c)
-    (of c *digits*))
+    (of c *digits* ))
 
 
-  (defun numberchar-head-p (c)
-    (of c (pp *digits* '(#\+ #\-))))
+  (defun hex-numberchar-p (c)
+    (of c *hex-digits*))
 
 
   ;;; Generate one meta type fun
@@ -137,6 +141,11 @@
      ("doublequote" #\")
      ("backslash" #\\ )
      ("comma" #\,)
+     ("newline" #\Newline)
+     ("colon" #\:)
+     ("zerochar" #\0) ; zerop has been defined in 'cl
+     ("x" #\x)
+     ("equalchar" #\=)
      ))
 
   ;; (gen-char-type-fun-2
@@ -161,7 +170,10 @@
                          (map 'list (lambda (char-placeholder)
                                       (if (characterp char-placeholder)
                                           `(,char-placeholder)
-                                          char-placeholder))
+                                          (if (sequencep char-placeholder)
+                                              char-placeholder
+                                              (symbol-value char-placeholder))
+                                          ))
                               char-scope)))))
       (map 'list (lambda (form)
                    (let ((type-fun (first form))
@@ -243,11 +255,11 @@
 (defun show-lexer-step (states-stack c token-end-p &key (output t))
   (let ((state-0 (nth 0 states-stack))
         (state-1 (nth 1 states-stack)))
-    (format output "~a~a~a~%"
+    (format* output "~a~a~a~%"
             c
             (if token-end-p "[token] " (repeat-sequence " " 8))
             (cond ((eql state-1 state-0) state-1)
-                  (t (format nil "~a => ~a" state-1 state-0))))))
+                  (t (format* nil "~a => ~a" state-1 state-0))))))
 
 ;;; Key Function
 (defun next-state-map (state c)
@@ -273,14 +285,14 @@
 (defun token-enq (token token-queue)
   (let ((meta (car token))
         (inner-token-raw (cdr token)))
-    (enq `(,meta . ,(list2string (qlist inner-token-raw))) token-queue)))
+    (enq `(,meta . ,(list-string (qlist inner-token-raw))) token-queue)))
 
 
 (defun show-token (token &key (output t))
   (let* ((meta (car token))
          (inner-token-raw (cdr token))
          (inner-token  (if (stringp inner-token-raw) inner-token-raw
-                           (list2string (qlist inner-token-raw))))
+                           (list-string (qlist inner-token-raw))))
          (lineno (first meta))
          (colno (second meta)))
 
@@ -304,7 +316,7 @@
 
 
 (defun format-unknown-lex-pattern-error-info (token c state &key (output t))
-  (format output "~a~%~a: \"~a\" " (show-token token :output nil)
+  (format output "~a~%~a: \"~s\" " (show-token token :output nil)
           state c))
 
 (eval-always
@@ -321,7 +333,7 @@
                 (unless* (next-state-map cur-state c)
                          (let ((error-info
                                 (format-unknown-lex-pattern-error-info token c cur-state :output nil)))
-                           (format *ERROR-OUTPUT* error-info)
+                           (format* *ERROR-OUTPUT* error-info)
                            (restart-case (error 'unknown-lex-pattern-error
                                                 :token token :c c :state cur-state
                                                 :error-info error-info)
@@ -385,5 +397,5 @@
                 (return)))))))
 
 
-(defmethod run-all ((automaton lexer))
-  (loop while (next-token automaton :output t)))
+(defmethod run-all ((automaton lexer) &key (output t))
+  (loop while (next-token automaton :output output)))
