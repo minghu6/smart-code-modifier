@@ -267,7 +267,7 @@
     (acdr
      (first
       (filter
-       'self
+       'identity
        (mapcar (lambda (name)
                  (if (eval `(,(pred-fun-sym (symbol-name name)) ,c)) name nil))
                (mapcar 'car state-map))))
