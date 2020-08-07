@@ -1,5 +1,6 @@
+(eval-when (:compile-toplevel :load-toplevel)
+  (in-package #:php-hacker))
 
-(load "preprocessor.lisp")
 
 (defparameter *tested-s0* "<?php
 // Static variables

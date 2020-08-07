@@ -1,17 +1,34 @@
-((:extra-type-fun . ((var-head-p #\$)
+((:extra-type-fun . (
                      (varp (*digits* *ascii-letters* #\_))
                      (identityp (*digits* *ascii-letters* (#\_ #\\ )))
                      (identity-head-p (*ascii-letters* (#\_ #\\ )))
                      (phpp (#\p #\h))
                      (delimiterp (#\, #\;))
                      (numberchar-sign-p (#\+ #\-))
+                     (operatorp (#\+
+                                 #\-
+                                 #\*
+                                 #\/
+                                 #\%
+                                 #\^
+                                 #\|
+                                 #\&
+                                 #\~
+                                 #\!
+                                 #\?
+                                 #\:
+                                 #\=
+                                 #\@
+                                 #\>
+                                 #\<
+                                 #\.
+                                 #\$))
                      ))
  ;; priority based order
  (:lex-dfa-map .
                ((blank-state .((slash . (comment-start-state t))
                                (ngbs . (blank-state nil))
                                (<     . (tag-start-state t))
-                               (var-head . (var-name-state t))
                                (identity-head . (identity-name-state t))
                                (parenthesis . (parenthesis-state t))
                                (delimiter . (delimiter-state t))
@@ -49,7 +66,6 @@
                                     (ngbs . (blank-state t))
                                     (slash . (comment-start-state t))
                                     (delimiter . (delimiter-state t))
-                                    (var-head . (var-name-state t))
                                     (identity-head . (identity-name-state t))
                                     ))
 
@@ -57,7 +73,6 @@
                 (parenthesis-state . ((parenthesis . (parenthesis-state t))
                                       (ngbs . (blank-state t))
                                       (delimiter . (delimiter-state t))
-                                      (var-head . (identity-start-state t))
                                       (identity-head . (identity-name-state t))
                                       (singlequote . (singlequote-string-state t))
                                       (doublequote . (doublequote-string-state t))
@@ -105,13 +120,6 @@
                                         (delimiter . (delimiter-state t))
                                         (operator . (operator-state t))
                                         ))
-                (var-name-state . ((var-head . (var-name-state nil))
-                                   (identity . (identity-name-state nil))
-                                   (ngbs . (blank-state t))
-                                   (parenthesis . (blank-state t))
-                                   (delimiter . (delimiter-state t))
-                                   (operator . (operator-state t))
-                                   ))
                 (operator-state . ((operator . (operator-state nil))
 
                                    (zerochar . (numberzero-head-state t))
@@ -120,7 +128,6 @@
 
                                    (ngbs . (blank-state t))
                                    (identity-head . (identity-name-state t))
-                                   (var-head . (var-name-state t))
                                    (delimiter . (delimiter-state t))
                                    (parenthesis . (parenthesis-state t))
                                    ))
@@ -130,7 +137,6 @@
                                        (delimiter . (delimiter-state t))
                                        (ngbs . (blank-state t))
                                        (operator . (operator-state t))
-                                       (var-head . (var-name-state t))
                                        ))
                 (numberzero-head-state . ((x . (hex-numberchar-state nil))
                                           (numberchar . (numberchar-state nil))
@@ -138,21 +144,18 @@
                                           (delimiter . (delimiter-state t))
                                           (ngbs . (blank-state t))
                                           (operator . (operator-state t))
-                                          (var-head . (var-name-state t))
                                           ))
                 (hex-numberchar-state . ((hex-numberchar . (hex-numberchar-state nil))
                                          (parenthesis . (blank-state t))
                                          (delimiter . (delimiter-state t))
                                          (ngbs . (blank-state t))
                                          (operator . (operator-state t))
-                                         (var-head . (var-name-state t))
                                          ))
                 (numberchar-state . ((numberchar . (numberchar-state nil))
                                      (parenthesis . (blank-state t))
                                      (delimiter . (delimiter-state t))
                                      (ngbs . (blank-state t))
                                      (operator . (operator-state t))
-                                     (var-head . (var-name-state t))
                                      ))
 
                 (comment-start-state . ((slash . (line-comment-state nil))
@@ -171,7 +174,6 @@
                 (block-comment-end-phase2-state . ((ngbs . (blank-state t))
                                                    (slash . (comment-start-state t))
                                                    (<     . (tag-start-state t))
-                                                   (var-head . (var-name-state t))
                                                    (identity-head . (identity-name-state t))
                                                    (parenthesis . (parenthesis-state t))
                                                    (delimiter . (delimiter-state t))

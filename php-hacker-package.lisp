@@ -1,7 +1,7 @@
 (defpackage #:php-hacker
   (:nicknames #:php)
-  (:use #:cl #:alexandria #:serapeum #:minghu6)
+  (:use #:cl #:alexandria #:serapeum #:minghu6 #:cl-package-locks)
   (:export
-   #:run-test
+   #:test-gen-ast
    ))
 

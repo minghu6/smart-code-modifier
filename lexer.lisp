@@ -1,19 +1,3 @@
-;;(in-package #:php-hacker)
-;;(in-package #:cl)
-
-;; (eval-when (:compile-toplevel :execute :load-toplevel)
-
-;;   (ql:quickload "cl-ppcre")
-;;   (ql:quickload "alexandria")
-;;   (ql:quickload "serapeum")
-;;   (ql:quickload "minghu6")
-
-;;   (use-package '#:serapeum)
-;;   (use-package '#:alexandria)
-;;   (use-package '#:minghu6)
-;;   )
-
-
 ;;; Load configure env
 (eval-always
   (unlock-package '#:serapeum)
@@ -37,14 +21,13 @@
 ;;; Code generation start:
 (eval-always
   (defun pred-fun-sym (name)
-    (intern
-     (string-upcase
+    (sym
       (concatenate
        'string
        name
        (if (ppcre:scan (ppcre:create-scanner "^(\\w+-)+\\w+$") name)
            "-p"
-           "p")))))
+           "p"))))
 
 
   (defun parse-type-fun-name (fun-name)
@@ -263,7 +246,8 @@
 
 ;;; Key Function
 (defun next-state-map (state c)
-  (let ((state-map (acdr state *lex-dfa-map*)))
+  (let ((state-map (acdr state *lex-dfa-map*))
+        (*package* *mypackage*))
     (acdr
      (first
       (filter
@@ -271,8 +255,8 @@
        (mapcar (lambda (name)
                  (if (eval `(,(pred-fun-sym (symbol-name name)) ,c)) name nil))
                (mapcar 'car state-map))))
-    state-map)
-     ))
+     state-map)
+    ))
 
 
 (defun token-empty-p (token)
