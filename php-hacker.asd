@@ -11,6 +11,7 @@
                #:alexandria
                #:minghu6)
   :components ((:static-file "php.lex.conf.lisp")
+               (:static-file "lexer.lisp")
                (:static-file "preprocessor.lisp")
 
                (:file "php-hacker-package")

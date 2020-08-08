@@ -48,17 +48,6 @@ Now, I am printing some {$foo->bar[1]}.
 This should not print a capital 'A': \x41
 EOT;")
 
-;; (defun elt-string-queue-p (instance)
-;;   (and (queuep instance)
-;;        (every 'stringp (qlist instance))))
-
-;; (deftype elt-string-queue ()
-;;   `(satisfies elt-string-queue-p))
-
-
-;; (defgeneric queue-string (queue-instance customer-queue)
-;;   (:documentation "transform serapeum queue to string"))
-
 
 (defclass php-preprocessors (preprocessors)
   nil

@@ -4,9 +4,6 @@
 
 
 (eval-when (:execute)
-  (load "~/.sbclrc")
-
-
   (ql:quickload "alexandria")
   (ql:quickload "cl-ppcre")
   (ql:quickload "minghu6")
@@ -16,21 +13,23 @@
 
   (use-package '#:minghu6)
   (use-package '#:serapeum)
-  (use-package '#:alexandria)
+  (use-package '#:alexandria))
 
-  (defun load-repl-env ()
-    (load "/mnt/d/Coding/CL/smart-code-modifier/lexer.lisp")
-    (load "/mnt/d/Coding/CL/smart-code-modifier/preprocessor.lisp")
-    (load "/mnt/d/Coding/CL/smart-code-modifier/php-preprocessor.lisp")
 
-    (defparameter *mypackage* *package*)
-    )
+(eval-when (:execute)
+  (defparameter *source-home* "/mnt/d/Coding/CL/smart-code-modifier/")
 
-  (load-repl-env)
+
+  (defparameter *lex-conf*
+    (with-open-file (stream (merge-pathnames *source-home* #P"php.lex.conf.lisp"))
+      (read stream)))
+  (defparameter *lex-dfa-map* (acdr :lex-dfa-map *lex-conf*))
+  (defparameter *mypackage* *package*)
+
+  (load (merge-pathnames *source-home* "lexer.lisp"))
+  (load (merge-pathnames *source-home* "preprocessor.lisp"))
+  (load (merge-pathnames *source-home* "php-preprocessor.lisp"))
   )
-
-
-
 
 
 ;;; Temporary Utils Start
@@ -132,10 +131,62 @@
    ))
 
 
+(defparameter *type-identity*
+  '("function" "array" "const" ""))
+
+(defun syntax-parse-operator-recur-enq (cur-node token-value token-queue ast)
+  (cond
+    ((== token-value "$")
+     (if (null cur-node) (setq cur-node (:type 'value))
+         (unless (getf cur-node :symbol)
+           (setf (getf cur-node :symbol) (gen-ast token-queue) )) )
+     )
+
+    )
+  cur-node
+  )
+
+
 (defun syntax-parse-identity (cur-node token-value)
   (cond
     ((== token-value "use")
-     (setf (getf cur-node :type) 'use))
+     (progn
+       (setf (getf cur-node :type) 'use)
+       (setf (getf cur-node :items) (queue))
+       ))
+
+    ((== (getf cur-node :type) 'function)
+     (cond
+       ((null (getf cur-node :name))
+        (setf (getf cur-node :name) token-value))
+       ((null (getf cur-node :return-type))
+        (setf (getf cur-node :return-type)
+              token-value))
+       )
+     )
+
+    ((== (getf cur-node :type) 'class)
+     (cond
+       ((null (getf cur-node :name))
+        (setf (getf cur-node :name) token-value))
+
+       )
+     )
+
+    ((== (getf cur-node :type) 'use)
+     (let ((use-items (getf cur-node :items)))
+       (cond
+         ((and (null (getf (qback use-items) :as-type))
+               (of token-value '("function" "const")))
+          (setf (getf (qback use-items) :as-type) token-value))
+
+         ((null (getf (qback use-items) :from))
+          (setf (getf (qback use-items) :from) token-value))
+
+         ((null (getf (qback use-items) :as-type))
+          (setf (getf (qback use-items) :as-type) token-value))
+         )
+       ))
 
     ((== token-value "static")
      (setf (getf cur-node :static) t))
@@ -146,25 +197,8 @@
     ((== token-value "function")
      (setf (getf cur-node :type) 'function))
 
-    ((== (getf cur-node :type) 'function)
-     (cond
-       ((not (getf cur-node :name))
-        (setf (getf cur-node :name) token-value))
-       ((not (getf cur-node :return-type))
-        (setf (getf cur-node :return-type) token-value))
-       )
-     )
-
-    ((== (getf cur-node :type) 'use)
-     (cond
-       ((not (getf cur-node :type))
-        (se
-         tf (getf cur-node :name) token-value))
-       ((not (getf cur-node :return-type))
-        (setf (getf cur-node :return-type) token-value))
-       )
-     )
-
+    ((== token-value "class")
+     (setf (getf cur-node :type) 'class))
     )
 
   cur-node
@@ -178,11 +212,17 @@
        ((== (getf cur-node :type) 'function)
         (setf (getf cur-node :args)
               (gen-ast (next-queue token-queue
-                                   (lambda (item) (== (getf item :value) ")"))))))))
+                                   (lambda (item) (== (getf item :value) ")"))))))
+
+       ((== (getf cur-node :type) 'class)
+        (setf (getf cur-node :super-classes)
+              (gen-ast (next-queue token-queue
+                                   (lambda (item) (== (getf item :value) ")"))))))
+       ))
 
     ((== token-value "{")
      (cond
-       ((== (getf cur-node :type) 'function)
+       ((of (getf cur-node :type) '(function class))
         (progn
           (setf (getf cur-node :body)
                 (gen-ast (next-queue token-queue
@@ -202,7 +242,15 @@
                    (enq cur-node ast)
                    (setq cur-node nil)))
        ))
-    )
+    ((== token-value ",")
+     (cond ((== (getf cur-node :type) 'use)
+            (let ((last-use-item (qback (getf cur-node :items))))
+              (when last-use-item
+                (enq (queue) (getf cur-node :items)))
+              ))
+           )
+
+           ))
   cur-node
   )
 
@@ -221,7 +269,12 @@
                )
            (switch (token-type :test '==)
              ('raw
-              (enq token ast))
+              (unless cur-node
+                  (enq token ast)))
+
+             ('operator
+              (setq cur-node
+                    (syntax-parse-operator-recur-enq cur-node token-value token-queue ast)))
 
              ('identity
               (setq cur-node
@@ -252,6 +305,7 @@
   (gen-ast *reg-tested-token-queue*)
   )
 
+(test-gen-ast)
 ;(symbol-package *package*)
 
 ;; ((== (getf token :value) ":")

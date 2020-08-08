@@ -1,21 +1,3 @@
-;;; Load configure env
-(eval-always
-  (unlock-package '#:serapeum)
-
-  (defun load-lex-env ()
-    (let* ((lex-conf
-            (with-open-file (stream "/mnt/d/Coding/CL/smart-code-modifier/php.lex.conf.lisp")
-              (read stream)))
-           (lex-dfa-map (acdr :lex-dfa-map lex-conf)))
-
-      (defparameter *lex-conf* lex-conf)
-
-      ;; In essence, it just converts the regex pattern into dfa map manually.
-      ;; I'm a little genius maybe, [doge]
-      (defparameter *lex-dfa-map* lex-dfa-map)
-      ))
-  (load-lex-env)
-  )
 
 
 ;;; Code generation start:
@@ -59,7 +41,6 @@
            (map 'list (lambda (fun-name)
                (flet ((gen-cond (char-name)
                         `(,(pred-fun-sym char-name) c)))
-
                  (let* ((char-names (parse-type-fun-name fun-name))
                         (positive-name (first char-names))
                         (negative-names (rest char-names)))
