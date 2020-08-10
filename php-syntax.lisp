@@ -40,13 +40,14 @@
       contents)))
 
 
-(defun next-queue (source-queue end-test-fun &key (recycle-tail nil))
+(defun next-queue (source-queue end-test-fun &key (recycle-tail nil) (state-stack (stack)))
   (loop
      with new-queue = (queue)
      for item = (deq source-queue) then (deq source-queue)
      while (and item
                 (if (functionp end-test-fun)
-                    (not (funcall end-test-fun item))
+                    (not (if (emptyp state-stack) (funcall end-test-fun item)
+                             (funcall end-test-fun item :state-stack state-stack)))
                     (!= end-test-fun item)))
      do (enq item new-queue)
      finally (progn
@@ -65,11 +66,57 @@
 
 
 (setq queue0 (qconc (queue) '("int" "public" "function" "(" "aaa" "=" "bbb" ")" "this" "is")))
+
+(setq s0 (apply 'stack '(1 2)))
+
+
+(defun bala (l)
+  (ens 9 l)
+  (print l)
+  )
+
+
+(defgeneric the-other-paren (paren)
+  (:documentation " (the-other-paren \"{\" => })
+ (the-other-paren #\\*) => *
+"))
+
+(defmethod the-other-paren ((paren string))
+  (switch (paren :test '==)
+    ("(" ")")
+    ("[" "]")
+    ("{" "}")
+    (otherwise paren)))
+
+
+(defmethod the-other-paren ((paren character))
+  (switch (paren :test '==)
+    (#\( #\))
+    (#\[ #\])
+    (#\{ #\})
+    (otherwise paren)))
+
+
+(defun paren-matcher (match-identifier &key (key 'identity))
+  (let ((match-0 match-identifier)
+        (match-1 (the-other-paren match-identifier)))
+    (lambda (item &key state-stack)
+        (switch (item :test '== :key (lambda (item) (funcall key item)))
+          (match-0 (ens match-0 state-stack))
+          (match-1 (des state-stack)))
+        (emptyp state-stack))
+    ))
+
 (next-queue
  queue0
  ")"
  :recycle-tail t
  )
+
+(next-queue
+ (queue "b" "[" "cd" "]" "sss" "ddd" "]" "end" "end2")
+ (paren-matcher "[") :state-stack
+ (stack "["))
 
 ;;; Temporary Utils End
 
@@ -91,15 +138,15 @@
   '(("'((\\s|\\S)*)'" singlequote-string)
     ("\"((\\s|\\S)*)\"" doublequote-string)
     ("(?i)^([_\\\\a-z][_\\\\a-z0-9]*)$" identity)
-    ("(?i)^(\\$+[_\\a-z][_\\a-z0-9]*)$" var)
     ("^([\\[|\\]|\\(|\\)|\\{|\\}])$" parenthesis)
     ("^([,|;|:])$" delimiter)
     ("(?i)^((0|0x)?[-|+]?[0-9a-f]+)$" number)
-    ("(?i)^(\\+|\\-|\\*|\\/)$" operator)
+    ("(?i)^(\\+|\\-|\\*|\\/|\\$(\\s*\\$)*|\\=)$" operator)
     ("(/\\*(\\s|\\S)*\\*/|//(\\s|\\S)*)" comment)
     ("((\\s|\\S)*)" raw)
     )
   )
+
 
 
 (defun raw-node-p (token)
@@ -131,30 +178,59 @@
    ))
 
 
+(defun parse-var (token-queue)
+  (loop
+     with ast = (queue)
+     with cur-node = nil
+     for token = (deq token-queue) then (deq token-queue) while token
+     do
+       (let ((token-value (getf token :value))
+             (token-type (getf token :type)))
+
+         (cond
+           ((== token-type 'operator)
+            (if (== token-value "$")
+                (if (null cur-node)
+                    (progn
+                      (setq cur-node '(:type eval))
+                      (setf (getf cur-node :prefix) (queue "$")))
+                    (enq "$" (getf cur-node :prefix))
+                    )
+                (enq token ast)))
+
+           ((== token-type 'identity)
+            (cond
+              ((== (getf cur-node :type) 'eval)
+               (progn
+                 (setf (getf cur-node :symbol) token-value)
+                 (enq cur-node ast)
+                 (setq cur-node nil)))
+
+              (t (enq token ast))))
+
+           (t (enq token ast)))
+         )
+     finally (return ast))
+  )
+
+
+
 (defparameter *type-identity*
   '("function" "array" "const" ""))
 
 (defun syntax-parse-operator-recur-enq (cur-node token-value token-queue ast)
   (cond
-    ((== token-value "$")
-     (if (null cur-node) (setq cur-node (:type 'value))
-         (unless (getf cur-node :symbol)
-           (setf (getf cur-node :symbol) (gen-ast token-queue) )) )
-     )
-
-    )
+    ((== token-value "=")
+     (progn
+       (setq cur-node `(:type assignment :var ,cur-node)))))
   cur-node
   )
 
 
-(defun syntax-parse-identity (cur-node token-value)
-  (cond
-    ((== token-value "use")
-     (progn
-       (setf (getf cur-node :type) 'use)
-       (setf (getf cur-node :items) (queue))
-       ))
 
+
+(defun syntax-parse-identity-enq (cur-node token-value ast)
+  (cond
     ((== (getf cur-node :type) 'function)
      (cond
        ((null (getf cur-node :name))
@@ -188,6 +264,18 @@
          )
        ))
 
+    ((== (getf cur-node :type) 'eval)
+     (progn
+       (setf (getf cur-node :symbol) token-value)
+       (enq cur-node ast)
+       (setq cur-node nil)))
+
+    ((== token-value "use")
+     (progn
+       (setf (getf cur-node :type) 'use)
+       (setf (getf cur-node :items) (queue))
+       ))
+
     ((== token-value "static")
      (setf (getf cur-node :static) t))
 
@@ -203,6 +291,25 @@
 
   cur-node
   )
+
+
+(defun remove-raw-token (token-queue)
+  (filter (lambda (token) (!= (getf token :type) 'raw))
+          (if (queuep token-queue) (qlist token-queue)
+              token-queue)))
+
+
+(defun parse-array-value (token-queue)
+  (remove-raw-token
+   (gen-ast (next-queue
+             token-queue
+             (paren-matcher
+              "["
+              :key (lambda (token)
+                     (when (== (getf token :type) 'parenthesis)
+                       (getf token :value))
+                     ))
+             :state-stack (stack "[")))))
 
 
 (defun syntax-parse-parenthesis-recur-enq (cur-node token-value token-queue ast)
@@ -228,7 +335,23 @@
                 (gen-ast (next-queue token-queue
                                      (lambda (item) (== (getf item :value) "}")))))
           (enq cur-node ast)
-          (setq cur-node nil))))))
+          (setq cur-node nil)))))
+
+    ((== token-value "[")
+     (cond
+       ((null cur-node)
+        (progn
+          (setq cur-node
+                `(:type array :value ,(parse-array-value token-queue)))
+          (enq cur-node ast)
+          (setq cur-node nil)
+          ))
+
+       ((== (getf cur-node :type) 'assignment)
+        (setf (getf cur-node :value) (parse-array-value token-queue)))
+
+       ))
+    )
 
   cur-node
   )
@@ -255,11 +378,24 @@
   )
 
 
+;; (defun parse-statement (token-list)
+;;   (loop
+;;      with ast (queue)
+;;      for token in token-list do
+;;        (let ((token-value (getf token :value))
+;;              (token-type (getf token :type)))
+;;          (switch (token-type :test '==)
+;;            ()
+;;            ()
+;;            )
+
+;;          ))
+;;   )
+
+
 (defun gen-ast (token-queue)
   (loop
      with ast = (queue)
-     with fun-scope = nil
-     with static = nil
      with cur-node = nil
      for token = (deq token-queue) then (deq token-queue) while token
      do
@@ -270,15 +406,32 @@
            (switch (token-type :test '==)
              ('raw
               (unless cur-node
-                  (enq token ast)))
+                (enq token ast)))
+
+             ('number
+              (unless cur-node
+                (enq token ast)))
+
+             ('singlequote-string
+              (unless cur-node
+                (enq token ast)))
+
+             ('doublequote-string
+              (unless cur-node
+                (enq token ast)))
 
              ('operator
               (setq cur-node
                     (syntax-parse-operator-recur-enq cur-node token-value token-queue ast)))
 
+             ('eval
+              (cond
+                ((null cur-node)
+                 (setq cur-node token))))
+
              ('identity
               (setq cur-node
-                    (syntax-parse-identity cur-node token-value)))
+                    (syntax-parse-identity-enq cur-node token-value ast)))
 
              ('parenthesis
               (setq cur-node
@@ -291,7 +444,8 @@
 
            ))
 
-     finally (return (qlist* ast))))
+     finally (return ast)))
+
 
 
 ;(ast-parse-func (qappend (queue) '(1 2 3)))
@@ -302,10 +456,11 @@
   (defparameter *tested-token-queue*
     (get-php-token-queue "/mnt/d/Coding/CL/smart-code-modifier/draft/test-2.php"))
   (defparameter *reg-tested-token-queue* (regularize-token-queue *tested-token-queue*))
-  (gen-ast *reg-tested-token-queue*)
+  ;(parse-var *reg-tested-token-queue*)
+  (qlist* (gen-ast (parse-var *reg-tested-token-queue*)))
   )
 
-(test-gen-ast)
+;(test-gen-ast)
 ;(symbol-package *package*)
 
 ;; ((== (getf token :value) ":")
