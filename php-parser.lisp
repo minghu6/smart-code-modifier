@@ -3,46 +3,11 @@
   (in-package #:php-hacker))
 
 
-(eval-when (:execute)
-  (ql:quickload "alexandria")
-  (ql:quickload "cl-ppcre")
-  (ql:quickload "minghu6")
-  (ql:quickload "serapeum")
-  (ql:quickload "cl-fad")
-  (ql:quickload "ppath")
-
-  (use-package '#:minghu6)
-  (use-package '#:serapeum)
-  (use-package '#:alexandria))
-
-
-(eval-when (:execute)
-  (defparameter *source-home* "/mnt/d/Coding/CL/smart-code-modifier/")
-
-
-  (defparameter *lex-conf*
-    (with-open-file (stream (merge-pathnames *source-home* #P"php.lex.conf.lisp"))
-      (read stream)))
-  (defparameter *lex-dfa-map* (acdr :lex-dfa-map *lex-conf*))
-  (defparameter *mypackage* *package*)
-
-  (load (merge-pathnames *source-home* "lexer.lisp"))
-  (load (merge-pathnames *source-home* "preprocessor.lisp"))
-  (load (merge-pathnames *source-home* "php-preprocessor.lisp"))
-  )
-
-
 (defun create-php-lexer (php-file-path)
   (let* ((source (file-contents-string php-file-path))
          (php-preprocs (make-instance 'php-preprocessors :source source)))
     (make-instance 'lexer :source (run-all-preprocessors php-preprocs :output nil))
   ))
-
-
-(defun get-php-token-queue (php-file-path)
-  (let ((mylexer (create-php-lexer php-file-path)))
-    (run-all mylexer :output nil)
-    (token-queue mylexer)))
 
 
 (defparameter *php-token-labels*
@@ -63,7 +28,7 @@
   (== (getf token :type) 'raw))
 
 
-(defun regularize-token (token)
+(defun regularize-php-token (token)
   "regularize token content"
   (let* ((label-result (find-if (lambda (item) (ppcre:scan (first item) token))
                               *php-token-labels*))
@@ -74,18 +39,18 @@
   ))
 
 
-(defun regularize-token-queue (token-queue)
+(defun regularize-php-token-queue (token-queue)
   (apply
    'queue
    (mapcar (lambda (item)
              (let ((token-content (cdr item)))
-               (regularize-token token-content)
+               (regularize-php-token token-content)
                ))
            (qlist token-queue))
    ))
 
 
-(defun parse-var (token-queue)
+(defun parse-php-var (token-queue)
   (loop
      with ast = (queue)
      with cur-node = nil
@@ -124,7 +89,10 @@
 (defparameter *type-identity*
   '("function" "array" "const" "class"))
 
+
 (defun syntax-parse-operator-recur-enq (cur-node token-value token-queue ast)
+  (declare (ignore ast)
+           (ignore token-queue))
   (cond
     ((== token-value "=")
      (progn
@@ -133,7 +101,7 @@
   )
 
 
-(defun syntax-parse-identity-enq (cur-node token-value ast)
+(defun syntax-parse-identity-recur-enq (cur-node token-value token-queue ast)
   (cond
     ((== (getf cur-node :type) 'function)
      (cond
@@ -191,6 +159,9 @@
 
     ((== token-value "class")
      (setf (getf cur-node :type) 'class))
+
+    (t (progn
+         (enq `(:type identity :value ,token-value) ast)))
     )
 
   cur-node
@@ -205,7 +176,7 @@
 
 (defun parse-array-value (token-queue)
   (remove-raw-token
-   (gen-ast (next-queue
+   (gen-php-ast-2 (next-queue
              token-queue
              (paren-matcher
               "["
@@ -222,12 +193,12 @@
      (cond
        ((== (getf cur-node :type) 'function)
         (setf (getf cur-node :args)
-              (gen-ast (next-queue token-queue
+              (gen-php-ast-2 (next-queue token-queue
                                    (lambda (item) (== (getf item :value) ")"))))))
 
        ((== (getf cur-node :type) 'class)
         (setf (getf cur-node :super-classes)
-              (gen-ast (next-queue token-queue
+              (gen-php-ast-2 (next-queue token-queue
                                    (lambda (item) (== (getf item :value) ")"))))))
        ))
 
@@ -236,7 +207,7 @@
        ((of (getf cur-node :type) '(function class))
         (progn
           (setf (getf cur-node :body)
-                (gen-ast (next-queue token-queue
+                (gen-php-ast-2 (next-queue token-queue
                                      (lambda (item) (== (getf item :value) "}")))))
           (enq cur-node ast)
           (setq cur-node nil)))))
@@ -277,12 +248,12 @@
               ))
            )
 
-           ))
+     ))
   cur-node
   )
 
 
-(defun gen-ast (token-queue)
+(defun gen-php-ast-2 (token-queue)
   (loop
      with ast = (queue)
      with cur-node = nil
@@ -320,7 +291,7 @@
 
              ('identity
               (setq cur-node
-                    (syntax-parse-identity-enq cur-node token-value ast)))
+                    (syntax-parse-identity-recur-enq cur-node token-value token-queue ast)))
 
              ('parenthesis
               (setq cur-node
@@ -333,106 +304,19 @@
 
            ))
 
-     finally (return ast)))
+     finally (return (qlist* ast))))
 
 
-(defun ast-find-all (l &key keypair)
-  (labels ((ast-find-all-0 (l0 res &key keypair)
-             (let ((seq (value l0))
-                   (test-key (first keypair))
-                   (test-value (second keypair)))
-
-               (if (and (plistp seq) (== (getf seq test-key) test-value)) (enq l0 res))
-               (loop for item in seq do
-                    (if (list-mut-p item) (ast-find-all-0 item res :keypair keypair))
-                    )
-               )))
-    (let ((res (queue)))
-      (ast-find-all-0 l res :keypair keypair)
-      (instance-from (list-mut) (qlist res)))))
-
-
-(defun unpack-find-result (l)
-  (~> l value car value))
-
-(setq tree0 '((:type A :value 123)
-              (:type B :value 456 :other ((:type E) (:type F)))
-              (:type C :value 789)
-              (:type E)
-              )
-      )
-
-(setq tree1 (instance-from (list-mut) tree0))
-
-(setq item (ast-find-all tree1 :keypair '(:type E)))
-
-(defun test-gen-ast ()
-  (defparameter *tested-token-queue*
-    (get-php-token-queue "/mnt/d/Coding/CL/smart-code-modifier/draft/test-2.php"))
-  (defparameter *reg-tested-token-queue* (regularize-token-queue *tested-token-queue*))
-                                        ;(parse-var *reg-tested-token-queue*)
-  (defparameter ast0 (qlist* (gen-ast (parse-var *reg-tested-token-queue*))))
-  (defparameter ast (instance-from (list-mut) ast0))
-  )
-
-(test-gen-ast)
-
-(~> ast
-    (ast-find-all :keypair '(:TYPE function))
-    (ast-find-all :keypair '(:SYMBOL "schema33"))
-    unpack-find-result
-    )
-
-(setf (getf (value (car (value res1))) :symbol) "schemas22")
-
-;; Write Back
-
-
-
-
-
-;(symbol-package *package*)
-
-;; ((== (getf token :value) ":")
-;;  (cond
-;;    ((== (getf cur-node :type) "function")
-;;     (unless (getf cur-node :return-type)
-;;       (set))))
-;; (defun run-test (php-path &optional (start-dir "."))
-;;   (let ((lexer (create-php-lexer php-path)))
-;;     (format t "Lexer Parsing: ~a~%~%" (ppath:relpath php-path start-dir))
-;;     (run-all lexer :output nil)))
-
-
-;; (defparameter *path-queue* (queue))
-;; (defparameter *scaned-dir*
-;;   "/mnt/d/Coding/Python3/smart_code_modifier/draft/phpmyadmin/libraries/classes/")
-;; (cl-fad:walk-directory *scaned-dir*
-;;                        (lambda (path) (enq (namestring path) *path-queue*))
-;;                        :test (lambda (path) (string$= ".php" (namestring path))))
-
-;; (defun test-scanned-dir ()
-;;   (do ((php-path (front *path-queue*) (front *path-queue*)))
-;;       ((queue-empty-p *path-queue*) nil)
-;;     (run-test php-path *scaned-dir*)
-;;     (deq *path-queue*)))
-
-
-;(test-scanned-dir)
-
-;; (run-test
-;;  "/mnt/d/Coding/Python3/smart_code_modifier/draft/phpmyadmin/libraries/classes/OpenDocument.php"
-;;  *scaned-dir*)
-
-
-;  (load-repl-env)
-
-
-(defclass syntax ()
-
+(defclass php-parser (parser)
   nil)
 
-;;; Class PHPSyntax
-(defclass php-syntax ()
-  ())
+
+(defmethod initialize-instance :after ((myparser php-parser) &key)
+  (with-slots (source-path lexer gen-ast regularize-token-queue) myparser
+    (setf lexer (create-php-lexer source-path))
+   (setf gen-ast (lambda (token-queue) (gen-php-ast-2 (parse-php-var token-queue))))
+    ;(setf gen-ast (lambda (token-queue) (parse-php-var token-queue)))
+    (setf regularize-token-queue 'regularize-php-token-queue)
+    )
+  )
 
