@@ -1,4 +1,5 @@
 
+from typing import Type
 
 from antlr4 import (
     ParseTreeWalker,
@@ -23,7 +24,7 @@ class PhpFormatter:
     def __init__(self, src_str: str):
         self.src_str = src_str
 
-    def fmt(self):
+    def fmt(self, ReWriter: Type[PhpRewriter] = PhpRewriter) -> None:
         # Lex analyze
         lexer = PhpLexer(InputStream(self.src_str))
         tokens = CommonTokenStream(lexer)
@@ -34,7 +35,7 @@ class PhpFormatter:
 
         # semantics analyze
         walker = ParseTreeWalker()
-        rewriter = PhpRewriter(tokens)
+        rewriter = ReWriter(tokens)
 
         walker.walk(rewriter, ast)
 
