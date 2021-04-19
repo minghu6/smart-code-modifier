@@ -26,6 +26,8 @@ THE SOFTWARE.
 
 lexer grammar PhpLexer;
 
+// Language property: this(Java) -> self(Python)
+
 channels { PhpComments, ErrorLexem, SkipChannel }
 
 options {
@@ -43,7 +45,7 @@ HtmlComment:    '<!' '--' .*? '-->' -> channel(HIDDEN);
 HtmlDtd:        '<!' .*? '>';
 HtmlOpen:       '<' -> pushMode(INSIDE);
 Shebang
-    : '#' { this.IsNewLineOrStart(-2) }? '!' ~[\r\n]*
+    : '#' { self.IsNewLineOrStart(-2) }? '!' ~[\r\n]*
     ;
 NumberSign:     '#' ~'<'* -> more;
 Error:          .         -> channel(ErrorLexem);
@@ -59,7 +61,7 @@ mode INSIDE;
 
 PHPStartEchoInside: PhpStartEchoFragment -> type(Echo), pushMode(PHP);
 PHPStartInside:     PhpStartFragment -> channel(SkipChannel), pushMode(PHP);
-HtmlClose: '>' { this.PushModeOnHtmlClose(); };
+HtmlClose: '>' { self.PushModeOnHtmlClose(); };
 HtmlSlashClose: '/>' -> popMode;
 HtmlSlash:      '/';
 HtmlEquals:     '=';
@@ -107,8 +109,8 @@ StyleBody: .*? '</' 'style'? '>' -> popMode;
 
 mode PHP;
 
-PHPEnd:             ('?' | '%' {this.HasAspTags()}?) '>'
-      |             '</script>' {this.HasPhpScriptTag()}?;
+PHPEnd:             ('?' | '%' {self.HasAspTags()}?) '>'
+      |             '</script>' {self.HasPhpScriptTag()}?;
 Whitespace:         [ \t\r\n]+ -> channel(SkipChannel);
 MultiLineComment:   '/*' .*? '*/' -> channel(PhpComments);
 SingleLineComment:  '//' -> channel(SkipChannel), pushMode(SingleLineCommentMode);
@@ -293,7 +295,7 @@ OpenSquareBracket:  '[';
 CloseSquareBracket: ']';
 OpenCurlyBracket:   '{';
 CloseCurlyBracket:  '}'
-{ this.PopModeOnCurlyBracketClose(); };
+{ self.PopModeOnCurlyBracketClose(); };
 Comma:              ',';
 Colon:              ':';
 SemiColon:          ';';
@@ -315,10 +317,10 @@ SingleQuoteString: '\'' (~('\'' | '\\') | '\\' . )* '\'';
 DoubleQuote:       '"' -> pushMode(InterpolationString);
 
 StartNowDoc
-    : '<<<' [ \t]* '\'' NameString '\''  { this.ShouldPushHereDocMode(1) }? -> pushMode(HereDoc)
+    : '<<<' [ \t]* '\'' NameString '\''  { self.ShouldPushHereDocMode(1) }? -> pushMode(HereDoc)
     ;
 StartHereDoc
-    : '<<<' [ \t]* NameString { this.ShouldPushHereDocMode(1) }? -> pushMode(HereDoc)
+    : '<<<' [ \t]* NameString { self.ShouldPushHereDocMode(1) }? -> pushMode(HereDoc)
     ;
 ErrorPhp:                   .          -> channel(ErrorLexem);
 
@@ -326,7 +328,7 @@ mode InterpolationString;
 
 VarNameInInterpolation:     '$' NameString                                      -> type(VarName); // TODO: fix such cases: "$people->john"
 DollarString:               '$'                                                 -> type(StringPart);
-CurlyDollar:                '{' { this.IsCurlyDollar(1) }? { this.SetInsideString(); }  -> channel(SkipChannel), pushMode(PHP);
+CurlyDollar:                '{' { self.IsCurlyDollar(1) }? { self.SetInsideString(); }  -> channel(SkipChannel), pushMode(PHP);
 CurlyString:                '{'                                                 -> type(StringPart);
 EscapedChar:                '\\' .                                              -> type(StringPart);
 DoubleQuoteInInterpolation: '"'                                                 -> type(DoubleQuote), popMode;
@@ -347,8 +349,8 @@ HereDocText: ~[\r\n]*? ('\r'? '\n' | '\r');
 // fragments.
 // '<?=' will be transformed to 'echo' token.
 // '<?= "Hello world"; ?>' will be transformed to '<?php echo "Hello world"; ?>'
-fragment PhpStartEchoFragment: '<' ('?' '=' | { this.HasAspTags() }? '%' '=');
-fragment PhpStartFragment:     '<' ('?' 'php'? | { this.HasAspTags() }? '%');
+fragment PhpStartEchoFragment: '<' ('?' '=' | { self.HasAspTags() }? '%' '=');
+fragment PhpStartFragment:     '<' ('?' 'php'? | { self.HasAspTags() }? '%');
 fragment NameString: [a-zA-Z_\u0080-\ufffe][a-zA-Z0-9_\u0080-\ufffe]*;
 fragment HtmlNameChar
     : HtmlNameStartChar

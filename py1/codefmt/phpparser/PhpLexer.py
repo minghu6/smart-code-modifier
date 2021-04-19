@@ -1508,17 +1508,17 @@ class PhpLexer(PhpLexerBase):
 
     def HtmlClose_action(self, localctx:RuleContext , actionIndex:int):
         if actionIndex == 2:
-             this.PushModeOnHtmlClose(); 
+             self.PushModeOnHtmlClose(); 
      
 
     def CloseCurlyBracket_action(self, localctx:RuleContext , actionIndex:int):
         if actionIndex == 3:
-             this.PopModeOnCurlyBracketClose(); 
+             self.PopModeOnCurlyBracketClose(); 
      
 
     def CurlyDollar_action(self, localctx:RuleContext , actionIndex:int):
         if actionIndex == 4:
-             this.SetInsideString(); 
+             self.SetInsideString(); 
      
 
     def sempred(self, localctx:RuleContext, ruleIndex:int, predIndex:int):
@@ -1540,41 +1540,41 @@ class PhpLexer(PhpLexerBase):
 
     def Shebang_sempred(self, localctx:RuleContext, predIndex:int):
             if predIndex == 0:
-                return  this.IsNewLineOrStart(-2) 
+                return  self.IsNewLineOrStart(-2) 
          
 
     def PHPEnd_sempred(self, localctx:RuleContext, predIndex:int):
             if predIndex == 1:
-                return this.HasAspTags()
+                return self.HasAspTags()
          
 
             if predIndex == 2:
-                return this.HasPhpScriptTag()
+                return self.HasPhpScriptTag()
          
 
     def StartNowDoc_sempred(self, localctx:RuleContext, predIndex:int):
             if predIndex == 3:
-                return  this.ShouldPushHereDocMode(1) 
+                return  self.ShouldPushHereDocMode(1) 
          
 
     def StartHereDoc_sempred(self, localctx:RuleContext, predIndex:int):
             if predIndex == 4:
-                return  this.ShouldPushHereDocMode(1) 
+                return  self.ShouldPushHereDocMode(1) 
          
 
     def CurlyDollar_sempred(self, localctx:RuleContext, predIndex:int):
             if predIndex == 5:
-                return  this.IsCurlyDollar(1) 
+                return  self.IsCurlyDollar(1) 
          
 
     def PhpStartEchoFragment_sempred(self, localctx:RuleContext, predIndex:int):
             if predIndex == 6:
-                return  this.HasAspTags() 
+                return  self.HasAspTags() 
          
 
     def PhpStartFragment_sempred(self, localctx:RuleContext, predIndex:int):
             if predIndex == 7:
-                return  this.HasAspTags() 
+                return  self.HasAspTags() 
          
 
 

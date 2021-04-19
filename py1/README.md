@@ -7,7 +7,13 @@
 For example:
 
 ```bash
-$ cd ./grammars/php
-$ antlr4 -package codefmt.phpparser PhpLexer.g4 -Dlanguage=Python3 -o ../../codefmt/phpparser
-$ antlr4 -package codefmt.phpparser PhpParser.g4 -Dlanguage=Python3 -o ../../codefmt/phpparser
+$ cd ./codefmt/phpparser/
+$ antlr4 -Dlanguage=Python3 PhpLexer.g4 PhpParser.g4
+```
+
+
+## Run examples
+
+```bash
+
 ```
